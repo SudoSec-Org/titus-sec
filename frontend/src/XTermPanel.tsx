@@ -88,6 +88,11 @@ export default function XTermPanel({ timeline = [] }: XTermPanelProps) {
         if (task.result) {
           term.writeln(`             Result: \x1b[32m${task.result}\x1b[0m`);
         }
+      } else if (type === 'task_failed') {
+        term.writeln(`\r\x1b[31m[FAILED]\x1b[0m Process execution failed.`);
+        if (task.result) {
+          term.writeln(`             Error: \x1b[31m${task.result}\x1b[0m`);
+        }
       }
     } catch (err) {
       console.warn('Error writing to terminal:', err);

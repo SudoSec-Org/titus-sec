@@ -6,6 +6,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const { exec } = require('child_process');
 const tasks = require('./state/approval-tasks');
 
 // Load tool plugins
@@ -49,11 +50,16 @@ app.post('/api/task/approve', async (req,res) => {
   if (!task) return res.status(404).json({error: 'Task not found'});
   if (allow) {
     tasks.updateTaskStatus(id, tasks.Status.ALLOWED);
-    // fake execution
     tasks.updateTaskStatus(id, tasks.Status.RUNNING);
-    setTimeout(() => {
-      tasks.updateTaskStatus(id, tasks.Status.COMPLETED, 'Simulated run, real exec pending...');
-    }, 2000);
+    exec(task.command, { timeout: 300000, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        const output = ((stdout || '') + (stderr ? '\n' + stderr : '') + '\n' + (err.message || '')).trim();
+        tasks.updateTaskStatus(id, tasks.Status.FAILED, output || err.message);
+      } else {
+        const output = ((stdout || '') + (stderr ? '\n' + stderr : '')).trim();
+        tasks.updateTaskStatus(id, tasks.Status.COMPLETED, output || 'Completed with no output');
+      }
+    });
   } else {
     tasks.updateTaskStatus(id, tasks.Status.DENIED);
   }

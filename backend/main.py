@@ -70,6 +70,34 @@ class ApprovalModel(BaseModel):
     id: str
     allow: bool
 
+async def _execute_task(task_id: str, command: str):
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        output = stdout.decode(errors="ignore")
+        if stderr:
+            output = (output + "\n" + stderr.decode(errors="ignore")).strip() if output else stderr.decode(errors="ignore").strip()
+        else:
+            output = output.strip()
+        task = agent.approval_tasks.get(task_id)
+        if not task:
+            return
+        if proc.returncode == 0:
+            agent.update_task_status(task_id, agent.ApprovalStatus.COMPLETED, result=output or "Completed with no output")
+            await agent.emit_event({"type": "task_completed", "task": task.dict()})
+        else:
+            agent.update_task_status(task_id, agent.ApprovalStatus.FAILED, result=output or f"Process exited with code {proc.returncode}")
+            await agent.emit_event({"type": "task_failed", "task": task.dict()})
+    except Exception as e:
+        task = agent.approval_tasks.get(task_id)
+        if task:
+            agent.update_task_status(task_id, agent.ApprovalStatus.FAILED, result=str(e))
+            await agent.emit_event({"type": "task_failed", "task": task.dict()})
+
 @app.post("/api/task/approve")
 async def approve_task(approval: ApprovalModel, background_tasks: BackgroundTasks):
     task = agent.approval_tasks.get(approval.id)
@@ -78,13 +106,9 @@ async def approve_task(approval: ApprovalModel, background_tasks: BackgroundTask
     if approval.allow:
         agent.update_task_status(approval.id, agent.ApprovalStatus.ALLOWED)
         await agent.emit_event({"type": "task_approved", "task": task.dict()})
-        # Now actually run the tool (spawn subprocess or docker, not implemented here)
-        # Simulated execution delay/result
         agent.update_task_status(approval.id, agent.ApprovalStatus.RUNNING)
         await agent.emit_event({"type": "task_running", "task": task.dict()})
-        await asyncio.sleep(2)  # Simulated
-        agent.update_task_status(approval.id, agent.ApprovalStatus.COMPLETED, result="Simulated run, real exec pending...")
-        await agent.emit_event({"type": "task_completed", "task": task.dict()})
+        asyncio.create_task(_execute_task(approval.id, task.command))
     else:
         agent.update_task_status(approval.id, agent.ApprovalStatus.DENIED)
         await agent.emit_event({"type": "task_denied", "task": task.dict()})

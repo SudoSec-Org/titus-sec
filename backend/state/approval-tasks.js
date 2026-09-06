@@ -50,6 +50,7 @@ function updateTaskStatus(id, status, result) {
     case Status.DENIED: eventType = 'task_denied'; break;
     case Status.RUNNING: eventType = 'task_running'; break;
     case Status.COMPLETED: eventType = 'task_completed'; break;
+    case Status.FAILED: eventType = 'task_failed'; break;
   }
   if(eventType)
     emitEvent({ type: eventType, task });
