@@ -4,3 +4,6 @@ pluggy
 uvicorn
 starlette
 pytest
+pytest-asyncio
+httpx
+anyio

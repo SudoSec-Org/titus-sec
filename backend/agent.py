@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any
 from uuid import uuid4
 from pydantic import BaseModel
 import asyncio
+import time
 
 class ApprovalStatus(str, Enum):
     PENDING = "pending"
@@ -30,8 +31,16 @@ class ApprovalTask(BaseModel):
 approval_tasks: Dict[str, ApprovalTask] = {}
 task_events = asyncio.Queue(maxsize=100)
 
+def _now():
+    try:
+        loop = asyncio.get_running_loop()
+        return loop.time()
+    except RuntimeError:
+        return time.time()
+
 def make_task(plugin, tool_name, command, message, parameters, risk=None, docker=None):
     tid = str(uuid4())
+    now = _now()
     task = ApprovalTask(
         id=tid,
         plugin=plugin,
@@ -41,8 +50,8 @@ def make_task(plugin, tool_name, command, message, parameters, risk=None, docker
         parameters=parameters or {},
         status=ApprovalStatus.PENDING,
         result=None,
-        created_at=asyncio.get_event_loop().time(),
-        updated_at=asyncio.get_event_loop().time(),
+        created_at=now,
+        updated_at=now,
         risk=risk,
         docker=docker,
     )
@@ -54,7 +63,7 @@ def update_task_status(tid: str, status: ApprovalStatus, result=None):
     if not task:
         raise ValueError(f"No such task: {tid}")
     task.status = status
-    task.updated_at = asyncio.get_event_loop().time()
+    task.updated_at = _now()
     if result is not None:
         task.result = result
     approval_tasks[tid] = task

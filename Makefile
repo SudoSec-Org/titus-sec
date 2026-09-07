@@ -15,7 +15,7 @@ run:
 	concurrently "make backend" "make frontend"
 
 test:
-	$(PYTHON) -m pytest backend/tests
+	$(PYTHON) -m pytest tests backend/tests
 
 dev: install run
 
